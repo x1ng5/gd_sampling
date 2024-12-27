@@ -36,22 +36,22 @@ def generate_y(x_all, weight_range=1, noise=None, few_shot=False,
         y += noise_data
     return y, random_weight.squeeze()
 
-def conduct_gd(x_context, y_context, eta , w0 = None, steps = 1):
-    device = x_context.device
-    b,t,c = x_context.size()
-    if w0 is None:
-        wi = torch.zeros((b,c,1), device = device)
-    else:
-        wi = w0
-    x_context_t = x_context.transpose(1, 2)  # b * c * t
-    w_cot = [wi.transpose(1, 2).clone()]
-    for _ in range(steps):
-        wi -= eta / t * (x_context_t @ (x_context @ wi - y_context))
-        # b * c * t @ b * t * c @ b * c * 1 => b * c * 1
-        w_cot.append(wi.transpose(1, 2).clone())
+# def conduct_gd(x_context, y_context, eta , w0 = None, steps = 1):
+#     device = x_context.device
+#     b,t,c = x_context.size()
+#     if w0 is None:
+#         wi = torch.zeros((b,c,1), device = device)
+#     else:
+#         wi = w0
+#     x_context_t = x_context.transpose(1, 2)  # b * c * t
+#     w_cot = [wi.transpose(1, 2).clone()]
+#     for _ in range(steps):
+#         wi -= eta / t * (x_context_t @ (x_context @ wi - y_context))
+#         # b * c * t @ b * t * c @ b * c * 1 => b * c * 1
+#         w_cot.append(wi.transpose(1, 2).clone())
     
-    w_cot = torch.concat(w_cot, dim = 1)
-    return w_cot
+#     w_cot = torch.concat(w_cot, dim = 1)
+#     return w_cot
 
 def combine_input(x_context, y_context, w_cot):
     # x_context: b * t * c
@@ -73,3 +73,22 @@ def combine_input(x_context, y_context, w_cot):
         [xy_context, wcot_input], dim = -2
     )
     return input_seq # b * (t + k) * (2 * c + 2)
+
+def conduct_gd(x_context, y_context, eta , w0 = None, steps = 1, lbda = 0, gd_noise = 0, gd_noise_func = None):
+    device = x_context.device
+    b,t,c = x_context.size()
+    if w0 is None:
+        wi = torch.zeros((b,c,1), device = device)
+    else:
+        wi = w0
+    x_context_t = x_context.transpose(1, 2)  # b * c * t
+    w_cot = [wi.transpose(1, 2).clone()]
+    
+    for i in range(steps):
+        if gd_noise_func is not None:
+            wi -= eta * ((x_context_t @ (x_context @ wi - y_context)) + lbda * wi + gd_noise_func(gd_noise,wi,device)) 
+        else:
+            wi -= eta * ((x_context_t @ (x_context @ wi - y_context)) + lbda * wi)
+        w_cot.append(wi.transpose(1, 2).clone())
+    w_cot = torch.concat(w_cot, dim = 1)
+    return w_cot
