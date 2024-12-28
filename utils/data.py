@@ -74,7 +74,7 @@ def combine_input(x_context, y_context, w_cot):
     )
     return input_seq # b * (t + k) * (2 * c + 2)
 
-def conduct_gd(x_context, y_context, eta , w0 = None, steps = 1, lbda = 0, gd_noise = 0, gd_noise_func = None):
+def conduct_gd_noise(x_context, y_context, eta , w0 = None, steps = 1, lbda = 0, gd_noise = 0, gd_noise_func = None):
     device = x_context.device
     b,t,c = x_context.size()
     if w0 is None:
