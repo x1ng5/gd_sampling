@@ -92,3 +92,38 @@ def conduct_gd_noise(x_context, y_context, eta , w0 = None, steps = 1, lbda = 0,
         w_cot.append(wi.transpose(1, 2).clone())
     w_cot = torch.concat(w_cot, dim = 1)
     return w_cot
+
+
+
+def conduct_gd_discrete(x_context, y_context, eta, w0=None, steps=1, select_method="sample", choose_elements = 1):
+    device = x_context.device
+    b, t, c = x_context.size()
+    encode_list = 2**torch.arange(c,dtype=torch.int64, device = device)
+    encode_list = encode_list[None,:]
+    if w0 is None:
+        wi = torch.zeros((b, c, 1), device=device)
+    else:
+        wi = w0
+
+    x_context_t = x_context.transpose(1, 2)  # b * c * t
+    w_cot = []
+    
+    for i in range(steps):
+        # Gradient update
+        wi -= eta * (x_context_t @ (x_context @ wi - y_context))
+        wi = wi.clip(min=1e-10)  # Prevents division by zero
+        wi /= wi.sum(dim=1, keepdim=True)  # Normalize weights
+        if select_method == "sample":
+            indices = torch.multinomial(wi.squeeze(-1), num_samples=choose_elements, replacement=False)
+        elif select_method == "greedy":
+            indices = wi.squeeze(-1).topk(choose_elements, dim=-1).indices  # Top-k greedy selection
+        else:
+            raise NotImplementedError("Unknown selection method: {}".format(select_method))
+        assert indices.size(-1) == choose_elements
+        wi = torch.zeros((b, c), device=device)
+        wi[torch.arange(b, device=device).unsqueeze(1), indices] = 1
+        wi_encode = (encode_list * wi.to(torch.int64)).sum(dim = -1).cpu().numpy()
+        wi = wi.unsqueeze(-1)  # Restore original shape (b, c, 1)
+        w_cot.append(wi_encode[:, None].copy())
+    w_cot = np.concatenate(w_cot, axis = 1)
+    return w_cot
